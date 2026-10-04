@@ -1,0 +1,1055 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Carver maps each FDA drug label into its entry pathways and shows which patents wall each one, until when, and what each pathway is worth.">
+<title>Carver.AI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Jost:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one page at a time (hash-routed), quiet sheets on a soft gray ground. Brown (Orange Book + Purple Book)
+   carries structure and patent walls; cool steel blue marks what is OPEN or ACTIVE. Hairlines, no ornament. */
+:root{
+  --base:#D3D1CD; --panel:#C8C5C0; --sheet:#F6F5F2; --ink:#2A1F19; --ink-2:#463A33; --muted:#5C544E; --rule:#BBB5AE;
+  --brown:#5B4032; --brown-deep:#36271F; --camel:#C7A883;
+  --blue:#4A7396; --blue-soft:#8EADC8; --blue-tint:#DCE5EC; --blue-text:#35607F;
+  --wall:#5B4032; --open:#8EADC8; --on-dark:#F3EEE8; --on-dark-2:#C5B8AC;
+  --display:"Cormorant Garamond", "Garamond", "Iowan Old Style", Georgia, serif;
+  --body:"Jost", "Futura", "Avenir Next", "Helvetica Neue", Arial, sans-serif;
+  --mono:"IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  --gutter:clamp(16px,4vw,48px); --max:1200px;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+@media (prefers-reduced-motion: reduce){ *{animation:none!important;transition:none!important} }
+body{background:var(--base);color:var(--ink);font-family:var(--body);font-size:1rem;line-height:1.6;margin:0;-webkit-font-smoothing:antialiased}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.wrap{max-width:var(--max);margin-inline:auto;padding-inline:var(--gutter)}
+h1,h2,h3{font-family:var(--display);font-weight:600;letter-spacing:0;text-wrap:balance;margin:0;line-height:1.04}
+h1{font-size:clamp(2.6rem,5.6vw,4.4rem)}
+h2{font-size:clamp(1.9rem,3.4vw,2.6rem)}
+h3{font-size:1.45rem;line-height:1.12}
+p{margin:0}
+.eyebrow{font-family:var(--body);font-weight:500;font-size:.72rem;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+.lede{font-size:1.12rem;color:var(--ink-2);max-width:64ch}
+.mono{font-family:var(--mono);font-size:.82em}
+.num{font-variant-numeric:tabular-nums}
+.cut{}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ---------- header ---------- */
+header.site{position:sticky;top:env(safe-area-inset-top,0px);z-index:30;background:color-mix(in oklab,var(--base) 92%,transparent);backdrop-filter:blur(6px);border-bottom:1px solid var(--rule)}
+header.site .wrap{display:flex;align-items:center;gap:24px;min-height:68px}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none}
+.brand svg{width:34px;height:34px;flex:none}
+.brand b{font-family:var(--display);font-weight:700;font-size:1.75rem;letter-spacing:.01em;line-height:1}
+.brand span{font-family:var(--body);font-weight:500;font-size:.72rem;letter-spacing:.14em;color:var(--blue-text);transform:translateY(3px)}
+nav.main{display:flex;align-items:center;gap:2px;margin-left:auto}
+nav.main > a, .dd > summary{font-size:.9rem;font-weight:500;color:var(--ink-2);text-decoration:none;padding:8px 12px;cursor:pointer;list-style:none;letter-spacing:.01em}
+nav.main > a:hover, .dd > summary:hover{color:var(--ink)}
+nav.main > a[aria-current="page"]{color:var(--ink);box-shadow:inset 0 -1.5px 0 var(--brown)}
+.dd{position:relative}
+.dd > summary::-webkit-details-marker{display:none}
+.dd > summary::after{content:"";display:inline-block;width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(45deg) translate(-2px,-2px);margin-left:8px}
+.dd[open] > summary{color:var(--ink)}
+.dd .menu{position:absolute;top:calc(100% + 12px);right:0;min-width:320px;background:var(--sheet);border:1px solid var(--rule);border-top:2px solid var(--brown);padding:8px;display:grid;box-shadow:0 18px 40px rgba(42,31,25,.14)}
+.dd .menu a{display:grid;gap:2px;padding:10px 12px;text-decoration:none;color:var(--ink)}
+.dd .menu a small{color:var(--muted);font-size:.78rem}
+.dd .menu a:hover,.dd .menu a[aria-current="page"]{background:var(--base)}
+.dd .menu .sep{font-size:.66rem;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);padding:10px 12px 4px}
+.btn{display:inline-flex;align-items:center;gap:10px;font:500 .9rem/1 var(--body);letter-spacing:.03em;padding:14px 22px;text-decoration:none;border:0;border-radius:2px;cursor:pointer;transition:background .15s,color .15s}
+.btn.primary{background:var(--brown);color:var(--on-dark)}
+.btn.primary:hover{background:var(--brown-deep)}
+.btn.dark{background:var(--brown-deep);color:var(--on-dark)}
+.btn.dark:hover{background:var(--blue)}
+.btn.line{background:transparent;color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.btn.line:hover{background:var(--ink);color:var(--on-dark)}
+.mobile-menu{display:none}
+@media (max-width:980px){ nav.main{display:none} .mobile-menu{display:block;margin-left:auto} header.site .btn{display:none}
+  .mobile-menu .menu{right:0;left:auto;max-height:70vh;overflow:auto} }
+
+/* ---------- pages ---------- */
+.page{padding-block:clamp(44px,7vw,88px) clamp(56px,8vw,96px)}
+.page-head{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:20px 56px;align-items:end;margin-bottom:clamp(32px,5vw,52px)}
+.page-head .eyebrow{margin-bottom:14px}
+.page-head .lede{font-size:1.06rem}
+@media (max-width:900px){ .page-head{grid-template-columns:minmax(0,1fr)} }
+.block{margin-top:clamp(44px,6vw,72px)}
+.block-title{display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:18px;border-top:1px solid var(--ink);padding-top:14px}
+.block-intro{color:var(--ink-2);max-width:70ch;margin:-6px 0 18px}
+.page-nav{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:clamp(48px,6vw,72px);padding-top:18px;border-top:1px solid var(--rule)}
+.page-nav a{text-decoration:none;display:grid;gap:4px;max-width:46%}
+.page-nav a span{font-size:.68rem;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.page-nav a b{font-family:var(--display);font-weight:600;font-size:1.35rem}
+.page-nav a:hover b{color:var(--blue-text)}
+.page-nav a.next{text-align:right;margin-left:auto}
+
+/* ---------- exhibit frame ---------- */
+.ex{background:var(--sheet);min-width:0;border:1px solid var(--rule)}
+.ex-h{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 16px;padding:12px 20px;border-bottom:1px solid var(--rule);color:var(--ink-2);font-family:var(--mono);font-size:.72rem;letter-spacing:.02em}
+.ex-h .tag{color:var(--brown);font-family:var(--body);font-weight:500;text-transform:uppercase;letter-spacing:.16em;font-size:.66rem}
+.ex-b{padding:22px 20px}
+.ex-f{padding:12px 20px 14px;border-top:1px solid var(--rule);font-size:.8rem;color:var(--muted)}
+.scroll{overflow-x:auto}
+.legend{display:flex;flex-wrap:wrap;gap:8px 20px;font-size:.8rem;color:var(--muted)}
+.sw{display:inline-block;width:12px;height:12px;vertical-align:-1px;margin-right:7px;border-radius:1px}
+.sw.wall{background:var(--wall)} .sw.open{background:var(--open)} .sw.hatch{background:repeating-linear-gradient(135deg,var(--blue) 0 1px,transparent 1px 4px),var(--sheet);box-shadow:inset 0 0 0 1px var(--rule)}
+.sw.blank{background:var(--panel);box-shadow:inset 0 0 0 1px var(--rule)}
+.sw.claim{background:var(--wall);box-shadow:inset 0 0 0 2px var(--wall),inset 0 0 0 3.5px var(--on-dark)}
+.sw.code{background:linear-gradient(225deg,var(--camel) 0 6px,transparent 6px),var(--wall)}
+
+table.data{border-collapse:collapse;width:100%;font-size:.92rem}
+table.data th{font-family:var(--body);font-weight:500;font-size:.66rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);text-align:left;padding:0 12px 10px 0;border-bottom:1px solid var(--ink);white-space:nowrap}
+table.data td{padding:12px 12px 12px 0;border-bottom:1px solid var(--rule);vertical-align:middle;font-variant-numeric:tabular-nums}
+table.data tr:last-child td{border-bottom:0}
+table.data .r{text-align:right}
+table.data td.strong{font-family:var(--display);font-weight:600;font-size:1.12rem}
+.bar{height:8px;background:var(--panel);position:relative;min-width:90px}
+.bar i{position:absolute;inset:0 auto 0 0;background:var(--blue)}
+.bar.k i{background:var(--brown)}
+
+/* ---------- home ---------- */
+.hero{display:grid;grid-template-columns:minmax(0,1fr);gap:24px;max-width:1000px}
+.hero h1{font-size:clamp(2.9rem,6.6vw,5.4rem);line-height:1}
+.hero h1 em{font-style:italic;color:var(--brown)}
+.hero .ctas{display:flex;flex-wrap:wrap;gap:12px;margin-top:6px}
+.core{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:24px 48px;align-items:end;margin-bottom:22px}
+.core p{color:var(--ink-2)}
+@media (max-width:900px){ .core{grid-template-columns:minmax(0,1fr)} }
+.sol-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule)}
+.sol{background:var(--sheet);padding:20px 18px;text-decoration:none;display:grid;gap:8px;align-content:start;transition:background .15s}
+.sol:hover{background:var(--base)}
+.sol h3{font-size:1.22rem}
+.sol p{font-size:.86rem;color:var(--muted)}
+.sol .more{font-size:.74rem;letter-spacing:.12em;text-transform:uppercase;color:var(--blue-text);margin-top:4px}
+@media (max-width:1060px){ .sol-grid{grid-template-columns:repeat(3,minmax(0,1fr))} }
+@media (max-width:700px){ .sol-grid{grid-template-columns:minmax(0,1fr)} }
+
+/* ---------- lifecycle explorer ---------- */
+.xp{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(300px,1fr);gap:0}
+.xp-main{padding:22px 20px;min-width:0;border-right:1px solid var(--rule)}
+.xp-side{padding:22px 20px;min-width:0;display:grid;gap:14px;align-content:start}
+@media (max-width:1040px){ .xp{grid-template-columns:minmax(0,1fr)} .xp-main{border-right:0;border-bottom:1px solid var(--rule)} }
+.xp-stats{display:grid;grid-template-columns:auto repeat(3,minmax(0,1fr));gap:4px 24px;align-items:end;margin-bottom:18px}
+.xp-year{font-family:var(--display);font-weight:600;font-size:3.6rem;line-height:.85;font-variant-numeric:tabular-nums}
+.xp-stat b{display:block;font-family:var(--display);font-weight:600;font-size:1.7rem;line-height:1;font-variant-numeric:tabular-nums}
+.xp-stat span{display:block;font-size:.75rem;color:var(--muted);margin-top:4px}
+@media (max-width:560px){ .xp-stats{grid-template-columns:repeat(2,minmax(0,1fr))} }
+table.grid{border-collapse:separate;border-spacing:3px;width:100%;min-width:560px}
+table.grid thead th{font-family:var(--mono);font-weight:400;font-size:.64rem;letter-spacing:.02em;color:var(--muted);text-align:center;padding:0 0 6px;white-space:nowrap;line-height:1.3}
+table.grid tbody th{text-align:left;font-weight:500;font-size:.82rem;line-height:1.2;padding:0 10px 0 0;min-width:170px}
+table.grid tbody th small{display:block;font-family:var(--mono);font-size:.62rem;color:var(--muted);font-weight:400;margin-top:2px}
+table.grid tr.gh th{font-family:var(--display);font-weight:600;font-size:1.08rem;text-align:left;padding:12px 0 3px;border-bottom:1px solid var(--rule)}
+table.grid tbody th.q{font-family:var(--mono);font-size:.68rem;font-weight:400;color:var(--muted);min-width:132px}
+td.c{height:32px;min-width:52px;text-align:center;font-family:var(--mono);font-size:.72rem;font-variant-numeric:tabular-nums;border-radius:1px;
+  background:var(--wall);color:var(--on-dark);transition:background .4s,color .4s,box-shadow .15s}
+td.c.open{background:var(--open);color:var(--ink)}
+td.c.claim{box-shadow:inset 0 0 0 3px var(--wall),inset 0 0 0 4.5px var(--on-dark)}
+td.c.open.claim{box-shadow:inset 0 0 0 3px var(--open),inset 0 0 0 4.5px var(--brown-deep)}
+td.c.code{background-image:linear-gradient(225deg,var(--camel) 0 10px,transparent 10px)}
+td.c.open.code{background-image:linear-gradient(225deg,var(--brown-deep) 0 10px,transparent 10px)}
+.xp-time{margin-top:20px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px;align-items:center}
+.play{width:42px;height:42px;display:grid;place-items:center;background:var(--brown);color:var(--on-dark);border:0;border-radius:50%;cursor:pointer}
+.play:hover{background:var(--blue)}
+.play svg{width:14px;height:14px;margin-left:2px}
+.range-wrap{position:relative;padding-bottom:30px}
+input[type=range]{width:100%;appearance:none;-webkit-appearance:none;background:transparent;height:24px;margin:0}
+input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--ink-2)}
+input[type=range]::-moz-range-track{height:2px;background:var(--ink-2)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;margin-top:-8px;border-radius:50%;background:var(--blue);border:3px solid var(--sheet);box-shadow:0 0 0 1px var(--blue)}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--blue);border:3px solid var(--sheet)}
+.marks{position:absolute;left:0;right:0;top:26px;height:24px;font-family:var(--mono);font-size:.6rem;color:var(--muted)}
+.marks > span{position:absolute;transform:translateX(-50%);white-space:nowrap;padding-top:6px}
+.marks > span::before{content:"";position:absolute;left:50%;top:0;width:1px;height:5px;background:var(--ink-2)}
+.marks > span.ev{color:var(--blue-text)}
+.marks > span.first{transform:none}
+.marks > span.first::before{left:0}
+.marks > span.last{transform:translateX(-100%)}
+.marks > span.last::before{left:auto;right:0}
+@media (max-width:700px){ .marks > span .t{display:none} }
+.pt-list{display:grid;gap:4px}
+.pt{all:unset;cursor:pointer;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;padding:10px 12px;background:var(--base);box-shadow:inset 2px 0 0 var(--wall)}
+.pt:hover{background:var(--panel)}
+.pt[aria-pressed="true"]{background:var(--brown-deep);color:var(--on-dark);box-shadow:inset 2px 0 0 var(--blue-soft)}
+.pt .no{font-family:var(--mono);font-size:.8rem;font-weight:500}
+.pt .st{font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;justify-self:end;align-self:center}
+.pt .meta{font-size:.76rem;color:var(--muted);grid-column:1/-1}
+.pt[aria-pressed="true"] .meta{color:var(--on-dark-2)}
+.pt.expired{box-shadow:inset 2px 0 0 var(--open)}
+.pt.expired .no{text-decoration:line-through;text-decoration-color:var(--blue);text-decoration-thickness:1.5px}
+.pt.pending{opacity:.55}
+.pt-detail{background:var(--base);padding:14px;display:grid;gap:10px;font-size:.84rem}
+.pt-detail .k{font-size:.64rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.pt-detail ul{margin:0;padding:0;list-style:none;display:grid;gap:6px}
+.pt-detail li{display:grid;grid-template-columns:62px minmax(0,1fr);gap:8px}
+.pt-detail li b{font-family:var(--mono);font-weight:500;font-size:.75rem}
+.ob{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;text-align:center}
+.ob div{background:var(--sheet);padding:8px 4px}
+.ob b{display:block;font-family:var(--display);font-weight:600;font-size:1.5rem;line-height:1}
+.ob span{font-size:.68rem;color:var(--muted)}
+
+/* ---------- platform ---------- */
+.manifesto{background:var(--brown-deep);color:var(--on-dark);padding:clamp(30px,5vw,60px);display:grid;gap:18px}
+.manifesto p{font-family:var(--display);font-weight:500;font-size:clamp(1.4rem,2.6vw,2.1rem);line-height:1.22;max-width:42ch}
+.manifesto p.punch{font-style:italic;color:var(--blue-soft)}
+.manifesto .eyebrow{color:var(--on-dark-2)}
+.ladder{display:grid;gap:1px;background:var(--rule);border:1px solid var(--rule)}
+.rung{display:grid;grid-template-columns:150px minmax(0,1fr) 120px;gap:18px;align-items:center;background:var(--sheet);padding:18px 20px}
+.rung .k{font-size:.68rem;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.rung .v{font-size:.95rem}
+.rung .v small{display:block;color:var(--muted);font-size:.84rem;margin-top:3px}
+.rung .n{font-family:var(--display);font-weight:600;font-size:2.4rem;line-height:1;text-align:right;font-variant-numeric:tabular-nums}
+.rung .n small{display:block;font-family:var(--body);font-weight:400;font-size:.66rem;letter-spacing:.08em;color:var(--muted);margin-top:4px}
+.rung.total{background:var(--brown-deep);color:var(--on-dark)}
+.rung.total .k,.rung.total .n small,.rung.total .v small{color:var(--on-dark-2)}
+.rung.total .n{color:var(--blue-soft)}
+@media (max-width:640px){ .rung{grid-template-columns:minmax(0,1fr) auto} .rung .k{grid-column:1/-1} }
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+@media (max-width:900px){ .two{grid-template-columns:minmax(0,1fr)} }
+.layers{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule)}
+.layer{background:var(--sheet);padding:18px;display:grid;gap:6px;align-content:start}
+.layer b{font-family:var(--display);font-weight:600;font-size:1.2rem}
+.layer span{font-size:.84rem;color:var(--muted)}
+@media (max-width:980px){ .layers{grid-template-columns:repeat(2,minmax(0,1fr))} }
+table.static td.c{height:36px}
+
+/* ---------- value chain flow ---------- */
+.flow{display:grid;grid-template-columns:150px repeat(7,minmax(0,1fr));gap:0}
+.carver-band{grid-column:2/-1;background:var(--brown-deep);color:var(--on-dark);padding:13px 18px;display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 16px;font-size:.78rem;letter-spacing:.06em}
+.carver-band b{font-family:var(--display);font-weight:700;font-size:1.05rem;letter-spacing:.04em;color:var(--on-dark)}
+.carver-band span:last-child{color:var(--blue-soft);align-self:center}
+.drops{grid-column:2/-1;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));height:24px}
+.drops i{border-left:1px dashed var(--blue);margin-left:50%}
+.src{background:var(--sheet);border:1px solid var(--rule);padding:14px;display:grid;gap:6px;align-content:center;position:relative;margin-right:16px;min-width:0}
+.src b{font-family:var(--display);font-weight:600;font-size:1.2rem;line-height:1.05}
+.src span{font-size:.76rem;color:var(--muted);line-height:1.4}
+.src::after{content:"";position:absolute;right:-17px;top:50%;width:16px;height:1px;background:var(--ink)}
+.stn{position:relative;padding:0 6px;min-width:0}
+.stn .box{background:var(--sheet);padding:14px 10px;display:grid;gap:8px;align-content:start;height:100%;border-top:2px solid var(--brown);min-width:0}
+.stn .box b{font-family:var(--display);font-weight:600;font-size:1.06rem;line-height:1.1;overflow-wrap:break-word}
+.stn .box .d{font-size:.76rem;color:var(--muted);line-height:1.4}
+.stn .box .s{display:flex;flex-wrap:wrap;gap:4px}
+.stn .box .s a{font-size:.64rem;letter-spacing:.04em;text-decoration:none;color:var(--blue-text);box-shadow:inset 0 0 0 1px var(--blue-soft);padding:3px 6px;border-radius:2px;white-space:nowrap}
+.stn .box .s a:hover{background:var(--blue);color:var(--on-dark);box-shadow:none}
+.stn::after{content:"";position:absolute;right:-4px;top:20px;border:5px solid transparent;border-left:7px solid var(--brown);border-right:0;z-index:2}
+.stn.end::after{display:none}
+.investor-band{grid-column:2/-1;margin-top:14px;background:var(--blue-tint);padding:12px 18px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;font-size:.9rem}
+.investor-band a{font-size:.7rem;letter-spacing:.08em;text-decoration:none;background:var(--blue);color:var(--on-dark);padding:5px 10px;border-radius:2px;white-space:nowrap}
+@media (max-width:1100px){
+  .flow{grid-template-columns:minmax(0,1fr)}
+  .flow > div:empty,.drops{display:none}
+  .carver-band,.investor-band{grid-column:auto}
+  .carver-band{margin-bottom:14px}
+  .src{margin:0 0 16px}
+  .src::after{right:auto;left:28px;top:auto;bottom:-16px;width:1px;height:15px}
+  .stn{padding:0 0 14px}
+  .stn .box{grid-template-columns:170px minmax(0,1fr) auto;align-items:center;height:auto;gap:8px 16px}
+  .stn .box b{font-size:1.2rem}
+  .stn::after{right:auto;left:24px;top:auto;bottom:2px;border:5px solid transparent;border-top:8px solid var(--brown);border-bottom:0}
+  .investor-band{margin-top:2px}
+}
+@media (max-width:640px){ .stn .box{grid-template-columns:minmax(0,1fr)} }
+
+/* ---------- solution pages ---------- */
+.for{display:flex;flex-wrap:wrap;gap:6px;margin-top:20px}
+.for span{font-size:.7rem;letter-spacing:.06em;color:var(--brown);box-shadow:inset 0 0 0 1px var(--camel);padding:5px 10px;border-radius:2px}
+.deliv{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule)}
+.deliv div{background:var(--sheet);padding:18px;display:grid;gap:6px;align-content:start}
+.deliv b{font-family:var(--display);font-weight:600;font-size:1.22rem;line-height:1.1}
+.deliv span{font-size:.86rem;color:var(--muted)}
+@media (max-width:900px){ .deliv{grid-template-columns:minmax(0,1fr)} }
+.wedge{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:28px}
+@media (max-width:820px){ .wedge{grid-template-columns:minmax(0,1fr)} }
+.wedge .w{display:grid;gap:12px;align-content:start}
+.wedge .w .ttl{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.wedge .w .ttl b{font-family:var(--display);font-weight:700;font-size:1.3rem;letter-spacing:.02em}
+.wedge .w .ttl .score{font-family:var(--display);font-weight:600;font-size:2.8rem;line-height:1}
+.wedge .w .ttl .score.hi{color:var(--blue-text)}
+.wedge q{font-family:var(--display);font-style:italic;font-size:1.02rem;color:var(--ink-2);quotes:"\201C" "\201D";border-left:2px solid var(--camel);padding-left:12px}
+.wedge .codes{font-size:.84rem;color:var(--muted)}
+td.m{height:26px;min-width:40px;background:var(--base);box-shadow:inset 0 0 0 1px var(--rule)}
+td.m.cl{background:var(--wall);box-shadow:none}
+td.m.co{background-image:repeating-linear-gradient(135deg,rgba(74,115,150,.9) 0 1.5px,transparent 1.5px 6px)}
+table.mini{border-collapse:separate;border-spacing:3px;width:100%}
+table.mini thead th{font-family:var(--mono);font-weight:400;font-size:.62rem;color:var(--muted);text-align:center;padding-bottom:4px}
+table.mini tbody th{font-weight:500;font-size:.8rem;text-align:left;padding-right:8px;white-space:nowrap}
+.stats3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--rule)}
+.stat{background:var(--sheet);padding:20px;display:grid;gap:8px;align-content:start}
+.stat b{font-family:var(--display);font-weight:600;font-size:3.4rem;line-height:.9;font-variant-numeric:tabular-nums;color:var(--brown)}
+.stat span{font-size:.88rem;color:var(--muted)}
+@media (max-width:760px){ .stats3{grid-template-columns:minmax(0,1fr)} }
+.timeline{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;position:relative}
+.timeline .t{padding:18px 18px 4px 0;border-top:1px solid var(--ink);position:relative;display:grid;gap:6px}
+.timeline .t::before{content:"";position:absolute;top:-6px;left:0;width:11px;height:11px;border-radius:50%;background:var(--brown)}
+.timeline .t.hit::before{background:var(--blue)}
+.timeline .t b{font-family:var(--display);font-weight:600;font-size:1.5rem}
+.timeline .t span{font-size:.88rem;color:var(--ink-2)}
+@media (max-width:760px){ .timeline{grid-template-columns:minmax(0,1fr)} .timeline .t{padding-top:20px} }
+.pairs{display:grid;gap:24px}
+.pairs .row{display:grid;gap:8px}
+.pairs .row .h{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.pairs .row .h b{font-family:var(--display);font-weight:600;font-size:1.2rem}
+.pairs .pair{display:grid;grid-template-columns:minmax(0,1fr) 70px;gap:12px;align-items:center}
+.pairs .pair span{font-family:var(--mono);font-size:.78rem;text-align:right}
+svg text{font-family:var(--mono)}
+.chart{width:100%;height:auto;display:block}
+
+/* prescriber card */
+.rxcard{background:var(--sheet);max-width:780px;border:1px solid var(--rule)}
+.rxcard .top{background:var(--brown-deep);color:var(--on-dark);padding:18px 22px;display:flex;justify-content:space-between;gap:12px;align-items:end;flex-wrap:wrap}
+.rxcard .top b{font-family:var(--display);font-weight:700;font-size:1.8rem;letter-spacing:.04em;line-height:1}
+.rxcard .top span{font-size:.72rem;letter-spacing:.06em;color:var(--on-dark-2)}
+.rxcard .use{padding:14px 22px;background:var(--blue-tint);color:var(--ink);font-family:var(--display);font-weight:600;font-size:1.2rem;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:baseline}
+.rxcard .use span{font-family:var(--body);font-size:.74rem;font-weight:500;letter-spacing:.06em;color:var(--blue-text)}
+.rxcard dl{margin:0;display:grid}
+.rxcard dl > div{display:grid;grid-template-columns:160px minmax(0,1fr);gap:14px;padding:13px 22px;border-bottom:1px solid var(--rule)}
+.rxcard dl > div:last-child{border-bottom:0}
+.rxcard dt{font-size:.66rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);padding-top:3px}
+.rxcard dd{margin:0;font-size:.92rem}
+.rxcard dd ul{margin:0;padding:0;list-style:none;display:grid;gap:5px}
+.rxcard dd li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px}
+.rxcard dd li .mono{color:var(--muted)}
+@media (max-width:560px){ .rxcard dl > div{grid-template-columns:minmax(0,1fr)} }
+
+/* method */
+.principles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule)}
+.principle{background:var(--sheet);padding:22px;display:grid;gap:8px;align-content:start}
+.principle p{color:var(--muted);font-size:.95rem}
+@media (max-width:760px){ .principles{grid-template-columns:minmax(0,1fr)} }
+.figures{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;background:var(--brown)}
+.figures div{background:var(--brown-deep);color:var(--on-dark);padding:20px 18px}
+.figures b{display:block;font-family:var(--display);font-weight:600;font-size:clamp(1.9rem,3vw,2.6rem);line-height:1;font-variant-numeric:tabular-nums}
+.figures span{display:block;font-size:.8rem;color:var(--on-dark-2);margin-top:8px}
+@media (max-width:900px){ .figures{grid-template-columns:repeat(2,minmax(0,1fr))} }
+.sources ul{list-style:none;margin:0;padding:0;display:grid;gap:0;border-top:1px solid var(--rule)}
+.sources li{padding:12px 2px;border-bottom:1px solid var(--rule);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;font-size:.94rem}
+.sources li span{font-size:.64rem;color:var(--muted);align-self:center;text-transform:uppercase;letter-spacing:.14em}
+.sources li.next{color:var(--blue-text)}
+
+/* company */
+.company{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:24px 56px;align-items:start}
+.company .box{background:var(--sheet);border:1px solid var(--rule);padding:26px;display:grid;gap:14px;color:var(--ink-2)}
+@media (max-width:900px){ .company{grid-template-columns:minmax(0,1fr)} }
+
+footer.site{background:var(--brown-deep);color:var(--on-dark-2);padding-block:30px 38px;font-size:.8rem}
+footer.site .wrap{display:flex;flex-wrap:wrap;gap:12px 32px;justify-content:space-between;align-items:center}
+footer.site .brand b{color:var(--on-dark)}
+footer.site .brand span{color:var(--blue-soft)}
+</style>
+<style>img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="mark" viewBox="0 -2 34 36">
+      <rect x="3.6" y="9.6" width="20.8" height="20.8" fill="#F6F5F2" stroke="#2A1F19" stroke-width="1.2"/>
+      <rect x="3.6" y="9.6" width="20.8" height="4.2" fill="#4A7396"/>
+      <rect x="6.5" y="17" width="11.5" height="1.4" fill="#8E847C"/>
+      <rect x="6.5" y="20.8" width="14.5" height="1.4" fill="#8E847C"/>
+      <rect x="6.5" y="24.6" width="8.5" height="1.4" fill="#8E847C"/>
+      <path d="M19 9.6 L14.3 22" stroke="#2A1F19" stroke-width="1.3"/>
+      <polygon points="14.3,22 21.7,6.6 18.5,5.4" fill="#D3D6DA" stroke="#2A1F19" stroke-width=".7" stroke-linejoin="round"/>
+      <polygon points="21.8,6.6 18.4,5.4 20.4,-0.2 23.8,1" fill="#5B4032"/>
+    </symbol>
+  </defs>
+</svg>
+
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="#home" aria-label="Carver.AI home"><svg aria-hidden="true"><use href="#mark"/></svg><b>Carver</b><span>.AI</span></a>
+    <nav class="main" aria-label="Primary">
+      <a href="#platform" data-nav="platform">Platform</a>
+      <a href="#ip" data-nav="ip">IP &amp; Generic Entry</a>
+      <details class="dd" id="dd-sol">
+        <summary>Solutions</summary>
+        <div class="menu">
+          <span class="sep">Core offering</span>
+          <a href="#ip" data-nav="ip">Intellectual Property Intelligence<small>Patent claims mapped to generic entry pathways</small></a>
+          <span class="sep">Supplementary solutions</span>
+          <a href="#white-spots" data-nav="white-spots">White-Spot Detection<small>Product gaps for 505(b)(2) sponsors</small></a>
+          <a href="#investors" data-nav="investors">Investor Support<small>Patent value, entry and expiry</small></a>
+          <a href="#bargaining" data-nav="bargaining">Payer–Manufacturer Bargaining<small>Exclusivity fragility and substitutes</small></a>
+          <a href="#pharmacy" data-nav="pharmacy">Pharmacists &amp; P&amp;T Committees<small>Drug and class comparisons</small></a>
+          <a href="#physicians" data-nav="physicians">Clinical Support for Physicians<small>Prescriber Cards and trial links</small></a>
+        </div>
+      </details>
+      <a href="#method" data-nav="method">Method &amp; data</a>
+      <a href="#company" data-nav="company">Company</a>
+    </nav>
+    <details class="dd mobile-menu" id="dd-mobile">
+      <summary>Menu</summary>
+      <div class="menu">
+        <a href="#home">Home</a><a href="#platform">Platform</a>
+        <span class="sep">Core offering</span>
+        <a href="#ip">Intellectual Property Intelligence</a>
+        <span class="sep">Supplementary solutions</span>
+        <a href="#white-spots">White-Spot Detection</a><a href="#investors">Investor Support</a>
+        <a href="#bargaining">Payer–Manufacturer Bargaining</a><a href="#pharmacy">Pharmacists &amp; P&amp;T Committees</a>
+        <a href="#physicians">Clinical Support for Physicians</a>
+        <a href="#method">Method &amp; data</a><a href="#company">Company</a>
+      </div>
+    </details>
+    <a class="btn primary" href="#company">Request a dossier</a>
+  </div>
+</header>
+
+<main>
+<!-- =============================== HOME =============================== -->
+<section class="page" id="home" data-page>
+  <div class="wrap">
+    <div class="hero">
+      <p class="eyebrow">Intellectual property intelligence for the pharmaceutical value chain</p>
+      <h1>Every decision about a drug runs through its label. <em>Carver measures it.</em></h1>
+      <p class="lede">Carver maps each FDA drug label into its entry pathways: the specific products and uses a competitor needs to reach the market. It shows which patents wall each pathway, until when, and what each pathway is worth.</p>
+      <div class="ctas"><a class="btn primary" href="#company">Request a dossier</a><a class="btn line" href="#platform">How the Entry Surface works</a></div>
+    </div>
+
+    <div class="block">
+      <div class="block-title"><h2>How product information flows</h2><span class="eyebrow">The value chain</span></div>
+      <p class="block-intro">A drug’s label leaves the manufacturer and passes through every party that decides whether, how and at what price the drug reaches a patient. Carver supplies each of them the criteria for its decision.</p>
+      <div class="scroll">
+      <div class="flow">
+        <div></div>
+        <div class="carver-band"><span><b>CARVER</b> · Entry Surface</span><span>decision criteria at every step</span></div>
+        <div></div>
+        <div class="drops"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="src"><b>FDA label</b><span>products, uses, patents, use codes</span></div>
+        <div class="stn"><div class="box"><b>Manufacturer</b><span class="d">Defend or challenge exclusivity; choose the next product.</span><span class="s"><a href="#ip">IP</a><a href="#white-spots">White Spots</a></span></div></div>
+        <div class="stn"><div class="box"><b>PBM</b><span class="d">Negotiate rebates; rank the formulary.</span><span class="s"><a href="#bargaining">Bargaining</a></span></div></div>
+        <div class="stn"><div class="box"><b>Payer</b><span class="d">Set coverage and utilization rules.</span><span class="s"><a href="#bargaining">Bargaining</a></span></div></div>
+        <div class="stn"><div class="box"><b>Hospital P&amp;T</b><span class="d">Select formulary agents; set interchange.</span><span class="s"><a href="#pharmacy">P&amp;T</a></span></div></div>
+        <div class="stn"><div class="box"><b>Clinician</b><span class="d">Choose a treatment for this patient.</span><span class="s"><a href="#physicians">Physicians</a></span></div></div>
+        <div class="stn"><div class="box"><b>Pharmacy</b><span class="d">Dispense; substitute a generic.</span><span class="s"><a href="#pharmacy">Pharmacists</a></span></div></div>
+        <div class="stn end"><div class="box"><b>Patient</b><span class="d">Access, adherence and out-of-pocket cost.</span><span class="s"><a href="#physicians">Physicians</a></span></div></div>
+        <div></div>
+        <div class="investor-band"><span><b>Capital markets</b> price the whole chain: patent coverage, generic entry and expiry.</span><a href="#investors">Investor Support</a></div>
+      </div>
+    </div>
+    </div>
+
+    <div class="block">
+      <div class="block-title"><h2>Core offering: Intellectual Property Intelligence</h2><span class="eyebrow">Patents and generic entry</span></div>
+      <div class="core">
+        <p>Every listed patent, charted claim by claim onto the drug label’s entry pathways. Carver shows which pathways are open to generic entry today, which patent stands in the way of the rest, and the year each one opens.</p>
+        <p class="legend" style="justify-content:flex-end"><span>Drag the timeline or press play. Select a patent to compare what its claims reach with what its use codes assert.</span></p>
+      </div>
+      <div class="ex" data-explorer></div>
+      <div style="margin-top:18px"><a class="btn dark" href="#ip">Explore IP &amp; generic entry intelligence</a></div>
+    </div>
+
+    <div class="block">
+      <div class="block-title"><h2>Supplementary solutions</h2><span class="eyebrow">Built on the same surface</span></div>
+      <div class="sol-grid">
+        <a class="sol" href="#white-spots"><span class="eyebrow">505(b)(2) sponsors</span><h3>White-Spot Detection</h3><p>Product gaps on the label that leave patient groups underserved.</p><span class="more">View</span></a>
+        <a class="sol" href="#investors"><span class="eyebrow">Investors</span><h3>Investor Support</h3><p>Market value of patent coverage, generic entry and expected expiry.</p><span class="more">View</span></a>
+        <a class="sol" href="#bargaining"><span class="eyebrow">Payers · PBMs</span><h3>Payer–Manufacturer Bargaining</h3><p>Exclusivity fragility and substitutes, for rebates and formulary priority.</p><span class="more">View</span></a>
+        <a class="sol" href="#pharmacy"><span class="eyebrow">Pharmacists · P&amp;T</span><h3>Pharmacists &amp; P&amp;T</h3><p>Drug-to-drug comparisons by substitutability and cost.</p><span class="more">View</span></a>
+        <a class="sol" href="#physicians"><span class="eyebrow">Physicians</span><h3>Clinical Support</h3><p>Prescriber Cards and trial links for every labeled use.</p><span class="more">View</span></a>
+      </div>
+    </div>
+    <nav class="page-nav" aria-label="Page"><span></span><a class="next" href="#platform"><span>Next</span><b>Platform →</b></a></nav>
+  </div>
+</section>
+
+<!-- =============================== PLATFORM =============================== -->
+<section class="page" id="platform" data-page hidden>
+  <div class="wrap">
+    <div class="page-head">
+      <div><p class="eyebrow">Platform</p><h1>The Entry Surface</h1></div>
+      <p class="lede">Carver reads the FDA label and builds every distinct way a molecule can reach the market. Patents, competitor labels, formularies, clinical evidence and spend are all measured on that one surface.</p>
+    </div>
+
+    <div class="manifesto">
+      <span class="eyebrow">Why the label</span>
+      <p>Product decisions are made relative to commercial essentiality and market entry opportunities. For FDA-regulated products, the object of these decisions is the product label.</p>
+      <p>But not just any part of the label. The parts that are absolutely necessary for market entry.</p>
+      <p class="punch">An “Entry Pathway” is the unit of economic viability.</p>
+    </div>
+
+    <div class="block">
+      <div class="block-title"><h2>From label to entry pathways</h2><span class="eyebrow">IMBRUVICA (ibrutinib) · 2025 label</span></div>
+      <div class="ladder">
+        <div class="rung"><span class="k">Composition</span><span class="v">The marketed active ingredient<small>Ibrutinib</small></span><span class="n">1<small>ingredient</small></span></div>
+        <div class="rung"><span class="k">Forms</span><span class="v">3 dosage forms, 5 strengths, 1 route<small>Read as the 6 products actually sold, not the 15 possible combinations</small></span><span class="n">6<small>products</small></span></div>
+        <div class="rung"><span class="k">Uses</span><span class="v">4 labeled indications<small>Chronic GVHD is labeled separately for adults and children, each with its own dose</small></span><span class="n">5<small>uses</small></span></div>
+        <div class="rung total"><span class="k">Entry pathways</span><span class="v">1 × 6 × 5<small>Each pathway carries its patent walls, value, substitutes and evidence</small></span><span class="n">30<small>pathways</small></span></div>
+      </div>
+    </div>
+
+    <div class="block">
+      <div class="ex">
+        <div class="ex-h"><span>IMBRUVICA (ibrutinib) · NDA 205552 · 2025 label · 30 entry pathways</span><span class="tag">Entry Surface</span></div>
+        <div class="ex-b scroll">
+          <table class="grid static">
+            <thead><tr><th><span class="sr">Use</span></th><th>Capsule 70 mg</th><th>Capsule 140 mg</th><th>Tablet 140 mg</th><th>Tablet 280 mg</th><th>Tablet 420 mg</th><th>Oral susp. 70 mg/mL</th></tr></thead>
+            <tbody>
+              <tr><th>Waldenström’s macroglobulinemia</th><td class="c">17</td><td class="c">19</td><td class="c">19</td><td class="c">15</td><td class="c">16</td><td class="c">17</td></tr>
+              <tr><th>Chronic GVHD<small>adult · after ≥1 line</small></th><td class="c">16</td><td class="c">18</td><td class="c">18</td><td class="c">14</td><td class="c">15</td><td class="c">15</td></tr>
+              <tr><th>Chronic GVHD<small>pediatric · after ≥1 line</small></th><td class="c">14</td><td class="c">16</td><td class="c">16</td><td class="c">12</td><td class="c">13</td><td class="c">13</td></tr>
+              <tr><th>CLL / SLL</th><td class="c">20</td><td class="c">22</td><td class="c">22</td><td class="c">18</td><td class="c">19</td><td class="c">19</td></tr>
+              <tr><th>CLL / SLL<small>17p deletion</small></th><td class="c">21</td><td class="c">23</td><td class="c">23</td><td class="c">19</td><td class="c">20</td><td class="c">20</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="ex-f legend"><span><i class="sw wall"></i>Walled pathway. The number is how many of the 28 listed patents have claims that reach it.</span></div>
+      </div>
+    </div>
+
+    <div class="block">
+      <div class="block-title"><h2>Layers on the surface</h2><span class="eyebrow">Same units, every answer</span></div>
+      <div class="layers">
+        <div class="layer"><b>Patents &amp; use codes</b><span>Each claim charted onto the pathways it reaches; each use code onto the pathways it asserts.</span></div>
+        <div class="layer"><b>Competitor labels</b><span>Which other labels carry the same products and uses, and where they differ.</span></div>
+        <div class="layer"><b>Payer formularies</b><span>Medicare Part D listing, tier and prior authorization for each product.</span></div>
+        <div class="layer"><b>Clinical evidence</b><span>The trials behind each labeled use, linked to registry and publication.</span></div>
+        <div class="layer"><b>Public payer spend</b><span>Sales attributed to each use and pathway, for patent and carve-out value.</span></div>
+      </div>
+    </div>
+    <nav class="page-nav" aria-label="Page"><a href="#home"><span>Previous</span><b>← Home</b></a><a class="next" href="#ip"><span>Next</span><b>Intellectual Property Intelligence →</b></a></nav>
+  </div>
+</section>
+
+<!-- =============================== IP =============================== -->
+<section class="page" id="ip" data-page hidden>
+  <div class="wrap">
+    <div class="page-head">
+      <div><p class="eyebrow">Core offering</p><h1>Intellectual Property Intelligence</h1>
+        <div class="for"><span>Brand &amp; generic competitors</span><span>Hatch-Waxman counsel</span><span>BPCIA counsel</span><span>Policymakers</span></div></div>
+      <p class="lede">Carver maps every patent claim to the generic entry opportunities on the drug label. Competitors see which pathways are open and when the rest open; counsel in Hatch-Waxman and BPCIA disputes see exactly what each claim reaches; policymakers see where use codes assert more than their patents claim.</p>
+    </div>
+    <div class="deliv">
+      <div><b>Claim-to-label map</b><span>Every listed patent, claim by claim, charted onto the products and uses it reaches.</span></div>
+      <div><b>Use-code accuracy</b><span>Pathways each Orange Book use code asserts, compared with what the patent claims.</span></div>
+      <div><b>Generic entry pathways</b><span>Pathways open today, the binding patent on each of the rest, and the year each opens.</span></div>
+    </div>
+    <div class="block">
+      <div class="block-title"><h2>Patent estate over the lifecycle</h2><span class="eyebrow">Interactive</span></div>
+      <div class="ex" data-explorer></div>
+    </div>
+    <div class="block">
+      <div class="block-title"><h2>Does the use code match the claim?</h2><span class="eyebrow">Use-code overbreadth</span></div>
+      <div class="ex">
+        <div class="ex-h"><span>Two drugs, one question: what the patent claims vs what its use code asserts</span><span class="tag">Overbreadth</span></div>
+        <div class="ex-b wedge">
+          <div class="w">
+            <div class="ttl"><div><b>CYMBALTA</b> <span class="mono" style="color:var(--muted)">duloxetine · NDA 21427</span></div><span class="score">0</span></div>
+            <div class="scroll"><table class="mini"><thead><tr><th></th><th>20 mg</th><th>30 mg</th><th>60 mg</th></tr></thead><tbody>
+              <tr><th>Major depressive disorder</th><td class="m"></td><td class="m"></td><td class="m"></td></tr>
+              <tr><th>Generalized anxiety disorder</th><td class="m"></td><td class="m"></td><td class="m"></td></tr>
+              <tr><th>Diabetic neuropathic pain</th><td class="m"></td><td class="m"></td><td class="m"></td></tr>
+              <tr><th>Chronic musculoskeletal pain</th><td class="m"></td><td class="m"></td><td class="m"></td></tr>
+              <tr><th>Fibromyalgia</th><td class="m cl co"></td><td class="m cl co"></td><td class="m cl co"></td></tr>
+            </tbody></table></div>
+            <q>A method of treating fibromyalgia comprising administering to a patient in need of treatment an effective amount of duloxetine.</q>
+            <p class="codes"><span class="mono">US 6,596,756</span> · use code <span class="mono">U-882</span> “management of fibromyalgia.” The code asserts the same 3 pathways the claim reaches. The other 12 stay available to a carve-out.</p>
+          </div>
+          <div class="w">
+            <div class="ttl"><div><b>ICLUSIG</b> <span class="mono" style="color:var(--muted)">ponatinib · NDA 203469</span></div><span class="score hi">16</span></div>
+            <div class="scroll"><table class="mini"><thead><tr><th></th><th>10 mg</th><th>15 mg</th><th>30 mg</th><th>45 mg</th></tr></thead><tbody>
+              <tr><th>CML, chronic phase</th><td class="m co"></td><td class="m co"></td><td class="m co"></td><td class="m co"></td></tr>
+              <tr><th>CML, accelerated phase</th><td class="m co"></td><td class="m co"></td><td class="m co"></td><td class="m co"></td></tr>
+              <tr><th>CML, blast phase</th><td class="m co"></td><td class="m co"></td><td class="m co"></td><td class="m co"></td></tr>
+              <tr><th>Ph+ ALL</th><td class="m co"></td><td class="m co"></td><td class="m co"></td><td class="m co"></td></tr>
+            </tbody></table></div>
+            <q>Crystalline Form A of ponatinib hydrochloride characterized by an x-ray powder diffraction pattern …</q>
+            <p class="codes"><span class="mono">US 9,493,470</span> · use codes <span class="mono">U-1948</span>, <span class="mono">U-1700</span>. The claim recites a crystal form and reaches none of the 16 pathways; the codes assert all 16, through 2033, seven years past the compound patent.</p>
+          </div>
+        </div>
+        <div class="ex-f legend"><span><i class="sw wall"></i>Reached by the patent claim</span><span><i class="sw hatch"></i>Asserted by the use code</span><span>Overbreadth = pathways asserted − pathways claimed. Claim and use-code text verbatim.</span></div>
+      </div>
+    </div>
+    <div class="block">
+      <div class="block-title"><h2>Generic entry schedule</h2><span class="eyebrow">When the walls fall</span></div>
+      <div class="ex">
+        <div class="ex-h"><span>OZEMPIC + WEGOVY (semaglutide)</span><span class="tag">Opening schedule</span></div>
+        <div class="ex-b">
+          <svg class="chart" viewBox="0 0 520 250" role="img" aria-label="Value opening: 8.5 billion dollars in 2038, 8.2 billion in 2039, 1.2 billion in 2041, 17.9 billion cumulative.">
+            <g stroke="var(--rule)" stroke-width="1"><line x1="52" y1="210" x2="508" y2="210"/><line x1="52" y1="157.8" x2="508" y2="157.8" stroke-dasharray="2 4"/><line x1="52" y1="105.6" x2="508" y2="105.6" stroke-dasharray="2 4"/><line x1="52" y1="53.3" x2="508" y2="53.3" stroke-dasharray="2 4"/></g>
+            <g fill="var(--muted)" font-size="10" text-anchor="end"><text x="44" y="213">$0</text><text x="44" y="160.8">$5B</text><text x="44" y="108.6">$10B</text><text x="44" y="56.3">$15B</text></g>
+            <g fill="var(--muted)" font-size="10" text-anchor="middle"><text x="52" y="228">2024</text><text x="153.3" y="228">2028</text><text x="254.7" y="228">2032</text><text x="356" y="228">2036</text><text x="457.3" y="228">2040</text></g>
+            <rect x="397.7" y="121.2" width="16" height="88.8" fill="var(--brown)"/>
+            <rect x="423" y="124.5" width="16" height="85.5" fill="var(--brown)"/>
+            <rect x="473.7" y="197.1" width="16" height="12.9" fill="var(--brown)"/>
+            <polyline points="52,210 405.7,210 405.7,121.2 431,121.2 431,35.6 481.7,35.6 481.7,22.7 508,22.7" fill="none" stroke="var(--blue)" stroke-width="2.5"/>
+            <circle cx="508" cy="22.7" r="4" fill="var(--blue)"/>
+            <g font-size="10" fill="var(--ink)"><text x="391" y="116" text-anchor="end">$8.5B</text><text x="444" y="142">$8.2B</text><text x="481.7" y="190" text-anchor="middle">$1.2B</text><text x="498" y="14" text-anchor="end">$17.9B cumulative</text></g>
+          </svg>
+          <div class="legend" style="margin-top:8px"><span><i class="sw wall"></i>Value opening that year</span><span><i class="sw open"></i>Cumulative value open</span></div>
+        </div>
+        <div class="ex-f">2024 public-payer brand spend of $17.9B, released as the last wall on each pathway expires.</div>
+      </div>
+    </div>
+    <nav class="page-nav" aria-label="Page"><a href="#platform"><span>Previous</span><b>← Platform</b></a><a class="next" href="#white-spots"><span>Next</span><b>White-Spot Detection →</b></a></nav>
+  </div>
+</section>
+
+<!-- =============================== WHITE SPOTS =============================== -->
+<section class="page" id="white-spots" data-page hidden>
+  <div class="wrap">
+    <div class="page-head">
+      <div><p class="eyebrow">Solution</p><h1>White-Spot Detection for 505(b)(2) Sponsors</h1>
+        <div class="for"><span>505(b)(2) developers</span><span>Contract research organizations</span><span>Specialty generics</span></div></div>
+      <p class="lede">Carver detects product gaps on the drug label: uses the label approves for a patient group that no marketed product serves well. Each gap is a candidate for a new form of an existing ingredient, tested against the existing patents use by use.</p>
+    </div>
+    <div class="deliv">
+      <div><b>Pediatric uses with only pills</b><span>A use labeled for children with no oral liquid in the ingredient family, graded by the youngest labeled age.</span></div>
+      <div><b>Injectables that need preparation</b><span>Powders, concentrates and vials with no premixed bag or prefilled syringe on that route.</span></div>
+      <div><b>Multi-dose regimens without extended release</b><span>Uses labeled twice or three times daily with no extended-release version.</span></div>
+    </div>
+    <div class="block">
+      <div class="block-title"><h2>Confirmed gaps on 2024 labels</h2><span class="eyebrow">Product-level openings</span></div>
+      <div class="ex">
+        <div class="ex-h"><span>Openings with no approved product, brand or generic, that fills them</span><span class="tag">White Spots</span></div>
+        <div class="ex-b stats3">
+          <div class="stat"><b>82</b><span>Pediatric uses served only by tablets or capsules</span></div>
+          <div class="stat"><b>123</b><span>Injectable routes with no ready-to-use presentation</span></div>
+          <div class="stat"><b>20</b><span>Multi-dose oral uses with no extended-release version</span></div>
+        </div>
+        <div class="ex-f">Every opening is cross-checked against all approved products in Drugs@FDA and tested against the listed patents as a hypothetical new product.</div>
+      </div>
+    </div>
+    <div class="block">
+      <div class="block-title"><h2>A gap Carver flagged, then filled</h2><span class="eyebrow">KOSELUGO (selumetinib)</span></div>
+      <div class="ex">
+        <div class="ex-h"><span>Pediatric neurofibromatosis type 1 · oral dosage forms</span><span class="tag">Case</span></div>
+        <div class="ex-b timeline">
+          <div class="t"><b>2020</b><span>Approved for children 2 years and older. Sold as capsules only.</span></div>
+          <div class="t"><b>2020–2024</b><span>Carver grades it a strong pediatric gap in every label year: a young population with no liquid or sprinkle form.</span></div>
+          <div class="t hit"><b>Sept 2025</b><span>FDA approves oral granules (NDA 219943), and the label extends to children 1 year and older.</span></div>
+        </div>
+        <div class="ex-f">Dates from Carver’s label history and Drugs@FDA.</div>
+      </div>
+    </div>
+    <nav class="page-nav" aria-label="Page"><a href="#ip"><span>Previous</span><b>← Intellectual Property Intelligence</b></a><a class="next" href="#investors"><span>Next</span><b>Investor Support →</b></a></nav>
+  </div>
+</section>
+
+<!-- =============================== INVESTORS =============================== -->
+<section class="page" id="investors" data-page hidden>
+  <div class="wrap">
+    <div class="page-head">
+      <div><p class="eyebrow">Solution</p><h1>Investor Support</h1>
+        <div class="for"><span>Healthcare investors</span><span>Equity analysts</span><span>Business development</span></div></div>
+      <p class="lede">Product market valuations of patent coverage, generic entry and expected expiry. Carver attributes each drug’s sales to its uses and pathways, then prices every patent by the value it walls and the value that opens when it expires.</p>
+    </div>
+    <div class="deliv">
+      <div><b>Patent value</b><span>Value each patent covers, protects alone, and releases in its expiry year.</span></div>
+      <div><b>Opening schedule</b><span>Brand value that becomes open to generics, year by year.</span></div>
+      <div><b>Carve-Out Value</b><span>What a skinny-label generic could take, with and without pharmacy substitution.</span></div>
+    </div>
+    <div class="block">
+      <div class="block-title"><h2>Large single-patent cliffs, 2025–2026</h2><span class="eyebrow">Patent value</span></div>
+      <div class="ex">
+        <div class="ex-h"><span>Value on the pathways for which the patent is the last remaining wall</span><span class="tag">Cliff value</span></div>
+        <div class="ex-b scroll">
+          <table class="data">
+            <thead><tr><th>Drug</th><th>Patent</th><th class="r">Expires</th><th class="r">Value at cliff</th><th style="width:38%"></th></tr></thead>
+            <tbody>
+              <tr><td class="strong">Eliquis</td><td class="mono">US 6,967,208</td><td class="r">2026</td><td class="r">$22.1B</td><td><div class="bar"><i style="width:100%"></i></div></td></tr>
+              <tr><td class="strong">Farxiga</td><td class="mono">US 6,515,117</td><td class="r">2025</td><td class="r">$6.0B</td><td><div class="bar"><i style="width:27.2%"></i></div></td></tr>
+              <tr><td class="strong">Januvia</td><td class="mono">US 7,326,708</td><td class="r">2026</td><td class="r">$4.2B</td><td><div class="bar"><i style="width:19.1%"></i></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="ex-f">2024 public-payer brand spend (Medicare Part D, Part B, Medicaid). Patent-term expiry; litigation settlements not applied.</div>
+      </div>
+    </div>
+    <div class="block">
+      <div class="block-title"><h2>Carve-Out Value</h2><span class="eyebrow">Skinny-label exposure</span></div>
+      <div class="ex">
+        <div class="ex-h"><span>Next opening, two bounds</span><span class="tag">Carve-Out Value</span></div>
+        <div class="ex-b pairs">
+          <div class="row"><div class="h"><b>Incruse Ellipta</b><span class="mono">opens 2027</span></div>
+            <div class="pair"><div class="bar k"><i style="width:42.8%"></i></div><span>$0.22B</span></div>
+            <div class="pair"><div class="bar"><i style="width:86.2%"></i></div><span>$0.44B</span></div></div>
+          <div class="row"><div class="h"><b>Victoza + Saxenda</b><span class="mono">opens 2025</span></div>
+            <div class="pair"><div class="bar k"><i style="width:47.2%"></i></div><span>$0.24B</span></div>
+            <div class="pair"><div class="bar"><i style="width:100%"></i></div><span>$0.51B</span></div></div>
+          <div class="legend"><span><i class="sw wall"></i>Label-faithful: the opened pathways only</span><span><i class="sw open"></i>With substitution: the full value of the products they open</span></div>
+        </div>
+        <div class="ex-f">Pharmacies substitute an AB-rated generic regardless of indication, so a skinny label can reach past the uses it carries.</div>
+      </div>
+    </div>
+    <nav class="page-nav" aria-label="Page"><a href="#white-spots"><span>Previous</span><b>← White-Spot Detection</b></a><a class="next" href="#bargaining"><span>Next</span><b>Payer–Manufacturer Bargaining →</b></a></nav>
+  </div>
+</section>
+
+<!-- =============================== BARGAINING =============================== -->
+<section class="page" id="bargaining" data-page hidden>
+  <div class="wrap">
+    <div class="page-head">
+      <div><p class="eyebrow">Solution</p><h1>Payer–Manufacturer Bargaining Insights</h1>
+        <div class="for"><span>PBMs</span><span>Health plans</span><span>Manufacturer market access</span></div></div>
+      <p class="lede">Information on the fragility of exclusivity protections, existing generics and cross-molecule substitutes, to inform rebates and formulary prioritization.</p>
+    </div>
+    <div class="deliv">
+      <div><b>Exclusivity fragility</b><span>When each product’s first pathway opens, and to whom.</span></div>
+      <div><b>Cross-molecule substitutes</b><span>How much of one label a rival label covers, in both directions.</span></div>
+      <div><b>Formulary standing</b><span>Part D listing, tier and prior authorization by product.</span></div>
+    </div>
+    <div class="block">
+      <div class="block-title"><h2>SGLT2 inhibitors, head to head</h2><span class="eyebrow">Type 2 diabetes · 2024</span></div>
+      <div class="ex">
+        <div class="ex-h"><span>Leverage in one table: who can be replaced, and how soon exclusivity cracks</span><span class="tag">Bargaining</span></div>
+        <div class="ex-b scroll">
+          <table class="data">
+            <thead><tr><th>Drug</th><th class="r">Brand spend</th><th class="r">First pathway opens</th><th>Covered by best rival label</th><th class="r"></th><th class="r">Part D listing</th><th class="r">Prior auth.</th></tr></thead>
+            <tbody>
+              <tr><td class="strong">Jardiance</td><td class="r">$13.7B</td><td class="r">2034</td><td><div class="bar k"><i style="width:80%"></i></div></td><td class="r mono">80%</td><td class="r">99%</td><td class="r">0.1%</td></tr>
+              <tr><td class="strong">Farxiga</td><td class="r">$6.1B</td><td class="r" style="color:var(--blue-text);font-weight:600">2025</td><td><div class="bar k"><i style="width:60%"></i></div></td><td class="r mono">60%</td><td class="r">91%</td><td class="r">0.3%</td></tr>
+              <tr><td class="strong">Invokana</td><td class="r">$0.36B</td><td class="r">2031</td><td><div class="bar k"><i style="width:70%"></i></div></td><td class="r mono">70%</td><td class="r">18%</td><td class="r">0.0%</td></tr>
+              <tr><td class="strong">Steglatro</td><td class="r">$0.13B</td><td class="r">2030</td><td><div class="bar k"><i style="width:80%"></i></div></td><td class="r mono">80%</td><td class="r">5%</td><td class="r">4.6%</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="ex-f">Farxiga’s label covers 80% of Jardiance’s pathways, while Jardiance covers 60% of Farxiga’s; Farxiga’s first pathway opens in 2025, Jardiance’s in 2034. Brand spend is 2024 public-payer spend; listing is the share of Part D formularies carrying the brand.</div>
+      </div>
+    </div>
+    <div class="block">
+      <div class="block-title"><h2>Same class of patients, different utilization management</h2><span class="eyebrow">Part D · 2024</span></div>
+      <div class="ex">
+        <div class="ex-h"><span>Share of Part D formulary listings that require prior authorization</span><span class="tag">Formulary</span></div>
+        <div class="ex-b scroll">
+          <table class="data">
+            <thead><tr><th>Drug</th><th>Class</th><th style="width:46%">Prior authorization</th><th class="r"></th></tr></thead>
+            <tbody>
+              <tr><td class="strong">Ozempic</td><td>GLP-1</td><td><div class="bar"><i style="width:92.6%"></i></div></td><td class="r mono">93%</td></tr>
+              <tr><td class="strong">Mounjaro</td><td>GIP / GLP-1</td><td><div class="bar"><i style="width:90.9%"></i></div></td><td class="r mono">91%</td></tr>
+              <tr><td class="strong">Farxiga</td><td>SGLT2</td><td><div class="bar"><i style="width:.27%"></i></div></td><td class="r mono">0.3%</td></tr>
+              <tr><td class="strong">Jardiance</td><td>SGLT2</td><td><div class="bar"><i style="width:.07%"></i></div></td><td class="r mono">0.1%</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="ex-f">CMS Part D formulary files, mapped to each product on the label.</div>
+      </div>
+    </div>
+    <nav class="page-nav" aria-label="Page"><a href="#investors"><span>Previous</span><b>← Investor Support</b></a><a class="next" href="#pharmacy"><span>Next</span><b>Pharmacists &amp; P&amp;T Committees →</b></a></nav>
+  </div>
+</section>
+
+<!-- =============================== PHARMACY / P&T =============================== -->
+<section class="page" id="pharmacy" data-page hidden>
+  <div class="wrap">
+    <div class="page-head">
+      <div><p class="eyebrow">Solution</p><h1>Solutions for Pharmacists and Hospital P&amp;T Committees</h1>
+        <div class="for"><span>Hospital P&amp;T committees</span><span>Health-system pharmacy</span><span>Retail pharmacy</span></div></div>
+      <p class="lede">Drug-to-drug comparisons and therapeutic-area treatment options, based on clinical substitutability and cost-effectiveness for the patient.</p>
+    </div>
+    <div class="deliv">
+      <div><b>Class monographs</b><span>Every drug labeled for an indication, with the qualifiers that set each apart.</span></div>
+      <div><b>Interchange support</b><span>The best substitute for each drug and how much of its label that substitute covers.</span></div>
+      <div><b>Cost position</b><span>Generic availability and patent walls behind each drug’s price.</span></div>
+    </div>
+    <div class="block">
+      <div class="block-title"><h2>Class monograph</h2><span class="eyebrow">Type 2 diabetes mellitus · 2024</span></div>
+      <div class="ex">
+        <div class="ex-h"><span>28 drug families labeled for type 2 diabetes · SGLT2 members shown</span><span class="tag">P&amp;T</span></div>
+        <div class="ex-b scroll">
+          <table class="data">
+            <thead><tr><th>Drug</th><th>Active ingredient</th><th class="r">Labeled pathways</th><th>Covered by best substitute</th><th class="r"></th><th>Generic</th><th>Patent position</th></tr></thead>
+            <tbody>
+              <tr><td class="strong">Jardiance</td><td>empagliflozin</td><td class="r">4</td><td><div class="bar k"><i style="width:80%"></i></div></td><td class="r mono">80%</td><td>None</td><td>Fully walled</td></tr>
+              <tr><td class="strong">Farxiga</td><td>dapagliflozin</td><td class="r">4</td><td><div class="bar k"><i style="width:60%"></i></div></td><td class="r mono">60%</td><td>None</td><td>Fully walled</td></tr>
+              <tr><td class="strong">Invokana</td><td>canagliflozin</td><td class="r">4</td><td><div class="bar k"><i style="width:70%"></i></div></td><td class="r mono">70%</td><td>None</td><td>Fully walled</td></tr>
+              <tr><td class="strong">Steglatro</td><td>ertugliflozin</td><td class="r">2</td><td><div class="bar k"><i style="width:80%"></i></div></td><td class="r mono">80%</td><td>None</td><td>Fully walled</td></tr>
+              <tr><td class="strong">Brenzavvy</td><td>bexagliflozin</td><td class="r">1</td><td><div class="bar k"><i style="width:80%"></i></div></td><td class="r mono">80%</td><td>None</td><td>Fully walled</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="ex-f">Coverage is the share of a drug’s labeled pathways that the best competing label also carries. Patent position reflects 2024 walls.</div>
+      </div>
+    </div>
+    <nav class="page-nav" aria-label="Page"><a href="#bargaining"><span>Previous</span><b>← Payer–Manufacturer Bargaining</b></a><a class="next" href="#physicians"><span>Next</span><b>Clinical Support for Physicians →</b></a></nav>
+  </div>
+</section>
+
+<!-- =============================== PHYSICIANS =============================== -->
+<section class="page" id="physicians" data-page hidden>
+  <div class="wrap">
+    <div class="page-head">
+      <div><p class="eyebrow">Solution</p><h1>Evidence-Based Clinical Support for Physicians</h1>
+        <div class="for"><span>Prescribers</span><span>Clinical pharmacists</span><span>Medical policy teams</span></div></div>
+      <p class="lede">Prescriber Cards and clinical-trial links for each part of the drug label, supporting assessments of alternative treatments and the existing evidence for both on-label and off-label uses.</p>
+    </div>
+    <div class="deliv">
+      <div><b>Prescriber Card</b><span>One labeled use on one card: dose, products, evidence and alternatives.</span></div>
+      <div><b>On-label evidence</b><span>The trials behind each labeled use, resolved to registry and publications.</span></div>
+      <div><b>Off-label evidence</b><span>Trials of comparable drugs for uses this drug is not labeled for.</span></div>
+    </div>
+    <div class="block">
+      <div class="block-title"><h2>Prescriber Card</h2><span class="eyebrow">Example</span></div>
+      <article class="rxcard">
+        <div class="top"><b>IMBRUVICA</b><span>ibrutinib · kinase inhibitor · 2025 label</span></div>
+        <div class="use">Chronic lymphocytic leukemia / small lymphocytic lymphoma<span>incl. 17p deletion</span></div>
+        <dl>
+          <div><dt>Dose</dt><dd>420 mg once daily</dd></div>
+          <div><dt>Products</dt><dd>Capsules 70, 140 mg · Tablets 140, 280, 420 mg · Oral suspension 70 mg/mL</dd></div>
+          <div><dt>Pivotal trials</dt><dd><ul>
+            <li><span>HELIOS · 578 patients</span><span class="mono">NCT01611090</span></li>
+            <li><span>E1912 · 529 patients</span><span class="mono">NCT02048813</span></li>
+            <li><span>RESONATE · 391 patients</span><span class="mono">NCT01578707</span></li>
+            <li><span>RESONATE-2 · 269 patients</span><span class="mono">NCT01722487</span></li></ul></dd></div>
+          <div><dt>Labeled alternatives</dt><dd><ul>
+            <li><span>Brukinsa (zanubrutinib)</span><span class="mono">any line</span></li>
+            <li><span>Calquence (acalabrutinib)</span><span class="mono">any line</span></li>
+            <li><span>Venclexta (venetoclax)</span><span class="mono">first or later line</span></li>
+            <li><span>Jaypirca (pirtobrutinib)</span><span class="mono">later line</span></li>
+            <li><span>Copiktra (duvelisib)</span><span class="mono">later line</span></li>
+            <li><span>Zydelig (idelalisib)</span><span class="mono">later line, in combination</span></li></ul></dd></div>
+          <div><dt>Off-label evidence</dt><dd>3 completed trials of same-class drugs not labeled for this use</dd></div>
+        </dl>
+      </article>
+    </div>
+    <nav class="page-nav" aria-label="Page"><a href="#pharmacy"><span>Previous</span><b>← Pharmacists &amp; P&amp;T Committees</b></a><a class="next" href="#method"><span>Next</span><b>Method &amp; data →</b></a></nav>
+  </div>
+</section>
+
+<!-- =============================== METHOD & DATA =============================== -->
+<section class="page" id="method" data-page hidden>
+  <div class="wrap">
+    <div class="page-head">
+      <div><p class="eyebrow">Method &amp; data</p><h1>Built to be audited.</h1></div>
+      <p class="lede">Carver’s measurement is deterministic and reproducible. Language models assist at the edges; every number traces back to a label sentence, a patent claim or a public record.</p>
+    </div>
+    <div class="principles">
+      <div class="principle"><h3>Anchored to the label</h3><p>The FDA label is the document every party already relies on. Carver’s units come from it, and the rules for generic sameness make them the right units for entry and substitution.</p></div>
+      <div class="principle"><h3>Traceable to the sentence</h3><p>Each pathway, wall and match carries the label sentence, claim limitation or formulary row it came from, so an analyst or a lawyer can check any number.</p></div>
+      <div class="principle"><h3>Versioned through time</h3><p>Labels, listings and formularies change. Carver keeps every label edition and dates every patent wall, so each dossier reflects the market on a specific date.</p></div>
+      <div class="principle"><h3>Validated against real entry</h3><p>Pathways Carver marks as newly open show significantly more generic entry within the same drug and year, including in a natural experiment around the 2012 <em>Caraco v. Novo Nordisk</em> decision on use codes.</p></div>
+    </div>
+    <div class="block figures">
+      <div><b>2,005</b><span>NDAs on the Entry Surface</span></div>
+      <div><b>9,825</b><span>label versions, 1985–2025</span></div>
+      <div><b>99,124</b><span>entry pathways</span></div>
+      <div><b>6,906</b><span>patents charted claim by claim</span></div>
+      <div><b>1,344</b><span>registered trials linked to labeled uses</span></div>
+    </div>
+    <div class="block two sources">
+      <div><div class="block-title"><h2>In use today</h2><span class="eyebrow">Public records</span></div>
+        <ul>
+          <li>FDA structured product labels, every edition<span>Labels</span></li>
+          <li>Orange Book patents, use codes, exclusivities<span>Patents</span></li>
+          <li>USPTO patent claim text<span>Patents</span></li>
+          <li>Drugs@FDA applications and products<span>Products</span></li>
+          <li>CMS Part D formularies, 2019–2026<span>Payers</span></li>
+          <li>CMS Part D, Part B and Medicaid spending<span>Spend</span></li>
+          <li>MEPS prescriptions linked to diagnoses<span>Use mix</span></li>
+          <li>ClinicalTrials.gov and PubMed<span>Evidence</span></li>
+        </ul></div>
+      <div><div class="block-title"><h2>Next, with funding</h2><span class="eyebrow">Licensed data</span></div>
+        <ul>
+          <li class="next">Claims-level utilization by indication<span>Use mix</span></li>
+          <li class="next">Net pricing and rebate benchmarks<span>Value</span></li>
+          <li class="next">Product-level utilization by NDC<span>Value</span></li>
+          <li class="next">Litigation and settlement terms<span>Entry</span></li>
+          <li class="next">Commercial formularies and medical policies<span>Payers</span></li>
+          <li class="next">Biologics and the Purple Book (BPCIA)<span>Coverage</span></li>
+          <li class="next">Real-time feeds for labels, listings, approvals<span>Refresh</span></li>
+        </ul></div>
+    </div>
+    <nav class="page-nav" aria-label="Page"><a href="#physicians"><span>Previous</span><b>← Clinical Support for Physicians</b></a><a class="next" href="#company"><span>Next</span><b>Company →</b></a></nav>
+  </div>
+</section>
+
+<!-- =============================== COMPANY =============================== -->
+<section class="page" id="company" data-page hidden>
+  <div class="wrap">
+    <div class="page-head">
+      <div><p class="eyebrow">Company</p><h1>Start with one drug.</h1></div>
+      <p class="lede">Carver’s mission is to provide the information technology necessary for efficient decision-making across the pharmaceutical value chain, from drug manufacturer all the way down to the patient.</p>
+    </div>
+    <div class="company">
+      <div class="box">
+        <p>Providing therapeutically appropriate and cost-effective medications is a complicated process of many interacting parties. At every step a decision is made about the product, yet unclear reporting standards and lagging measurement technology impair those decisions. This is the friction Carver solves.</p>
+        <p>Carver grew out of academic research on how drug makers disclose patent protection and how that disclosure shapes generic entry. The company builds that measurement into tools for every party that handles a drug on its way to a patient.</p>
+      </div>
+      <div class="box">
+        <h3>Request a dossier</h3>
+        <p>We are looking for a small number of early partners for single-drug dossiers. To request a sample dossier or investor materials, contact the founder.</p>
+        <div><a class="btn dark" href="#ip">See the IP exhibit</a></div>
+      </div>
+    </div>
+    <nav class="page-nav" aria-label="Page"><a href="#method"><span>Previous</span><b>← Method &amp; data</b></a><a class="next" href="#home"><span>Back to</span><b>Home →</b></a></nav>
+  </div>
+</section>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <a class="brand" href="#home" aria-label="Carver.AI home"><svg aria-hidden="true"><use href="#mark"/></svg><b>Carver</b><span>.AI</span></a>
+    <span>Decision support. Not legal or medical advice.</span>
+    <span>Exhibits use public data; spend is public-payer gross spend.</span>
+    <span>© 2026 Carver.AI</span>
+  </div>
+</footer>
+
+<script>
+/* ======================== Otezla patent-estate data (Carver pipeline, 2025 label) ======================== */
+var OTEZLA = {
+  title: "OTEZLA (apremilast) · NDA 205437 · 2025 label · 6 products × 10 uses = 60 entry pathways",
+  cols: ["Kit 10 mg","Kit 20 mg","Kit 30 mg","Tablet 20 mg","Tablet 30 mg","Tablet 75 mg"],
+  groups: [["Psoriatic arthritis",[0,1,2]],["Plaque psoriasis, moderate to severe",[3,4,5]],["Oral ulcers of Behçet’s disease",[6]],["Plaque psoriasis",[7,8,9]]],
+  rows: [["Psoriatic arthritis","adult"],["Psoriatic arthritis","pediatric · 10 mg"],["Psoriatic arthritis","pediatric · 20 mg"],
+         ["Plaque psoriasis, moderate to severe","adult"],["Plaque psoriasis, moderate to severe","pediatric · 10 mg"],["Plaque psoriasis, moderate to severe","pediatric · 20 mg"],
+         ["Oral ulcers of Behçet’s disease","all ages"],["Plaque psoriasis","adult"],["Plaque psoriasis","pediatric · 10 mg"],["Plaque psoriasis","pediatric · 20 mg"]],
+  /* walling patents per cell: row-pattern A (psoriatic arthritis), B (psoriasis), C (Behçet's); last column = Tablet 75 mg */
+  sets: (function(){
+    var A=["10092541","7208516","7427638","8455536","8802717","9018243","9724330","9872854"], A75=["7208516","7427638","8455536","8802717","9018243","9724330"];
+    var B=["10092541","7427638","7659302","9018243","9724330"], B75=["7427638","7659302","9018243","9724330"];
+    var C=["10092541","7427638","9018243","9724330"], Cd=["10092541","7427638","8455536","9018243","9724330"], C75=["7427638","8455536","9018243","9724330"];
+    function row(x,l){ return [x,x,x,x,x,l]; }
+    return [row(A,A75),row(A,A75),row(A,A75),row(B,B75),row(B,B75),row(B,B75),[C,C,C,Cd,Cd,C75],row(B,B75),row(B,B75),row(B,B75)];
+  })(),
+  patents: [
+    {no:"7208516", kind:"Method of use", from:2015, exp:"2023-03", expY:2023, codes:["U-1505"]},
+    {no:"7659302", kind:"Method of use", from:2015, exp:"2023-03", expY:2023, codes:["U-1505","U-1595","U-2658","U-3276"]},
+    {no:"8455536", kind:"Dosing method", from:2015, exp:"2023-03", expY:2023, codes:["U-1505","U-1595","U-2658","U-3276"]},
+    {no:"8802717", kind:"Method of use", from:2015, exp:"2023-03", expY:2023, codes:["U-1561"]},
+    {no:"9018243", kind:"Method of use", from:2016, exp:"2023-03", expY:2023, codes:["U-1505","U-1595","U-2656","U-2658","U-3276"]},
+    {no:"9724330", kind:"Method of use", from:2018, exp:"2023-03", expY:2023, codes:["U-1561","U-1595","U-2656","U-2658","U-3276"]},
+    {no:"7427638", kind:"Product", from:2014, exp:"2028-02", expY:2028, codes:[]},
+    {no:"9872854", kind:"Titration method", from:2018, exp:"2034-05", expY:2034, codes:["U-2232","U-2233"]},
+    {no:"10092541", kind:"Titration method", from:2018, exp:"2034-05", expY:2034, codes:["U-2403","U-2659"]}
+  ],
+  codeText: {"U-1505":"Treatment of psoriatic arthritis","U-1561":"Treatment of psoriatic arthritis","U-1595":"Treatment of psoriasis",
+    "U-2232":"Psoriatic arthritis, dosage titration schedule","U-2233":"Psoriatic arthritis, titration schedule and a second active agent",
+    "U-2403":"Psoriasis, dosage titration schedule","U-2656":"Adults with active psoriatic arthritis",
+    "U-2658":"Adults with oral ulcers of Behçet’s disease","U-2659":"Adults with Behçet’s oral ulcers, titration schedule",
+    "U-3276":"Plaque psoriasis, candidates for phototherapy or systemic therapy"},
+  /* rows each use code asserts (a use code is not limited to a product, so it asserts every column of those rows) */
+  codeRows: {"U-1505":[0,1,2],"U-1561":[0,1,2],"U-2232":[0,1,2],"U-2233":[0,1,2],"U-2656":[0],
+    "U-1595":[3,4,5,7,8,9],"U-2403":[3,4,5,7,8,9],"U-3276":[7,8,9],"U-2658":[6],"U-2659":[6]},
+  minY: 2014, maxY: 2035, startY: 2025, startSel: "7659302",
+  events: [[2014,"Approval"],[2023,"6 patents expire"],[2028,"75 mg opens"],[2034,"All open"]]
+};
+
+function fmtPat(n){ return "US " + n.replace(/\B(?=(\d{3})+(?!\d))/g, ","); }
+
+function Explorer(root, D){
+  var NR = D.rows.length, NC = D.cols.length, year = D.startY, sel = D.startSel, hover = null, timer = null;
+  var byNo = {}; D.patents.forEach(function(p){ byNo[p.no] = p; });
+  function inForce(p, y){ return y >= p.from && y < p.expY; }  // a patent stops protecting in its expiry year
+  function claimSet(no){ var s = {}; for (var i=0;i<NR;i++) for (var j=0;j<NC;j++) if (D.sets[i][j].indexOf(no) > -1) s[i+","+j] = 1; return s; }
+  function codeSet(no){ var s = {}; byNo[no].codes.forEach(function(c){ (D.codeRows[c]||[]).forEach(function(i){ for (var j=0;j<NC;j++) s[i+","+j] = 1; }); }); return s; }
+  function size(o){ return Object.keys(o).length; }
+
+  var uid = "x" + Math.random().toString(36).slice(2, 7);
+  var html = '<div class="ex-h"><span>' + D.title + '</span><span class="tag">Patent estate · lifecycle</span></div><div class="xp"><div class="xp-main">' +
+    '<div class="xp-stats"><div class="xp-year" aria-live="polite"></div>' +
+    '<div class="xp-stat"><b data-k="open"></b><span>pathways open to generics</span></div>' +
+    '<div class="xp-stat"><b data-k="force"></b><span>patents in force</span></div>' +
+    '<div class="xp-stat"><b data-k="next"></b><span>next opening</span></div></div>' +
+    '<div class="scroll"><table class="grid"><thead><tr><th><span class="sr">Use</span></th>' +
+    D.cols.map(function(c){ var k = c.indexOf(' '); return '<th scope="col">' + c.slice(0,k) + '<br>' + c.slice(k+1) + '</th>'; }).join('') + '</tr></thead><tbody>';
+  D.groups.forEach(function(g){
+    html += '<tr class="gh"><th colspan="' + (NC + 1) + '" scope="rowgroup">' + g[0] + '</th></tr>';
+    g[1].forEach(function(i){
+      html += '<tr><th scope="row" class="q">' + D.rows[i][1] + '</th>';
+      for (var j=0;j<NC;j++) html += '<td class="c" data-i="' + i + '" data-j="' + j + '"></td>';
+      html += '</tr>';
+    });
+  });
+  html += '</tbody></table></div>' +
+    '<div class="xp-time"><button class="play" type="button" aria-label="Play the lifecycle"><svg viewBox="0 0 16 16"><path d="M3 2 L14 8 L3 14 Z" fill="currentColor"/></svg></button>' +
+    '<div class="range-wrap"><label class="sr" for="' + uid + '">Year</label><input id="' + uid + '" type="range" min="' + D.minY + '" max="' + D.maxY + '" step="1" value="' + year + '"><div class="marks">' +
+    D.events.map(function(e, k){ return '<span class="ev' + (k === 0 ? ' first' : '') + (k === D.events.length - 1 ? ' last' : '') + '" style="left:' + ((e[0]-D.minY)/(D.maxY-D.minY)*100) + '%">' + e[0] + '<span class="t"> · ' + e[1] + '</span></span>'; }).join('') +
+    '</div></div></div>' +
+    '<div class="legend" style="margin-top:6px"><span><i class="sw wall"></i>Walled (number = patents in force)</span><span><i class="sw open"></i>Open to generic entry</span><span><i class="sw claim"></i>Ring: reached by the selected patent’s claims</span><span><i class="sw code"></i>Cut corner: asserted by its use codes</span></div>' +
+    '</div><div class="xp-side"><span class="eyebrow">Listed patents · select to overlay</span><div class="pt-list"></div><div class="pt-detail"></div></div></div>' +
+    '<div class="ex-f">Coverage from Carver’s claim-by-claim charting of each listed patent; use codes from the Orange Book. Patent-term dates; settlements not applied. The 2025 label is shown across the whole timeline.</div>';
+  root.innerHTML = html;
+
+  var cells = root.querySelectorAll("td.c"), range = root.querySelector('input[type=range]'), play = root.querySelector(".play");
+  var list = root.querySelector(".pt-list"), detail = root.querySelector(".pt-detail");
+  list.innerHTML = D.patents.map(function(p){
+    var cs = size(claimSet(p.no)), as = size(codeSet(p.no));
+    return '<button class="pt" type="button" data-no="' + p.no + '" aria-pressed="false"><span class="no">' + fmtPat(p.no) + '</span><span class="st"></span>' +
+      '<span class="meta">' + p.kind + ' · expires ' + p.exp + ' · ' + (p.codes.length ? p.codes.join(", ") : "no use code") + '</span></button>';
+  }).join("");
+  var items = list.querySelectorAll(".pt");
+
+  function render(){
+    var shown = hover || sel, cl = shown ? claimSet(shown) : {}, co = shown ? codeSet(shown) : {};
+    var open = 0, next = null;
+    cells.forEach(function(td){
+      var i = +td.dataset.i, j = +td.dataset.j, ps = D.sets[i][j];
+      var live = ps.filter(function(n){ return inForce(byNo[n], year); });
+      var isOpen = live.length === 0, k = i + "," + j;
+      var oy = Math.max.apply(null, ps.map(function(n){ return byNo[n].expY; }));
+      if (oy > year && (next === null || oy < next)) next = oy;
+      if (isOpen) open++;
+      td.className = "c" + (isOpen ? " open" : "") + (cl[k] ? " claim" : "") + (co[k] ? " code" : "");
+      td.textContent = isOpen ? "" : live.length;
+      td.title = D.rows[i][0] + " (" + D.rows[i][1] + ") × " + D.cols[j] + (isOpen ? ": open" : ": " + live.length + " patents in force");
+    });
+    var force = D.patents.filter(function(p){ return inForce(p, year); }).length;
+    root.querySelector(".xp-year").textContent = year;
+    root.querySelector('[data-k="open"]').textContent = open + " / " + (NR*NC);
+    root.querySelector('[data-k="force"]').textContent = force + " / " + D.patents.length;
+    root.querySelector('[data-k="next"]').textContent = next === null ? "—" : next;
+    items.forEach(function(b){
+      var p = byNo[b.dataset.no], st = b.querySelector(".st");
+      b.classList.toggle("expired", year >= p.expY); b.classList.toggle("pending", year < p.from);
+      st.textContent = year < p.from ? "Not yet listed" : (year >= p.expY ? "Expired" : "In force");
+      b.setAttribute("aria-pressed", b.dataset.no === sel ? "true" : "false");
+    });
+    if (shown){
+      var p = byNo[shown], cs = size(cl), as = size(co);
+      detail.innerHTML = '<div><span class="k">' + fmtPat(p.no) + ' · ' + p.kind + '</span></div>' +
+        '<div class="ob"><div><b>' + cs + '</b><span>pathways claimed</span></div><div><b>' + as + '</b><span>asserted by codes</span></div><div><b>' + (p.codes.length ? (as - cs > 0 ? "+" : "") + (as - cs) : "n/a") + '</b><span>overbreadth</span></div></div>' +
+        (p.codes.length ? '<ul>' + p.codes.map(function(c){ return '<li><b>' + c + '</b><span>' + D.codeText[c] + '</span></li>'; }).join("") + '</ul>'
+                        : '<p>A product patent needs no use code: it walls every use of the products it claims.</p>');
+    }
+  }
+  items.forEach(function(b){
+    b.addEventListener("click", function(){ sel = (sel === b.dataset.no) ? null : b.dataset.no; render(); });
+    b.addEventListener("mouseenter", function(){ hover = b.dataset.no; render(); });
+    b.addEventListener("mouseleave", function(){ hover = null; render(); });
+    b.addEventListener("focus", function(){ hover = b.dataset.no; render(); });
+    b.addEventListener("blur", function(){ hover = null; render(); });
+  });
+  range.addEventListener("input", function(){ stop(); year = +range.value; render(); });
+  function stop(){ if (timer){ clearInterval(timer); timer = null; play.setAttribute("aria-label","Play the lifecycle"); } }
+  play.addEventListener("click", function(){
+    if (timer){ stop(); return; }
+    if (year >= D.maxY) year = D.minY;
+    play.setAttribute("aria-label","Pause");
+    timer = setInterval(function(){
+      year++; range.value = year; render();
+      if (year >= D.maxY) stop();
+    }, 420);
+  });
+  render();
+}
+
+/* ======================== router (one page at a time; bare #tokens) ======================== */
+(function(){
+  var pages = Array.prototype.slice.call(document.querySelectorAll("[data-page]"));
+  var ids = pages.map(function(p){ return p.id; });
+  function show(){
+    var id = (location.hash || "#home").slice(1);
+    if (ids.indexOf(id) < 0) id = "home";
+    pages.forEach(function(p){ p.hidden = p.id !== id; });
+    document.querySelectorAll("nav.main a[data-nav], .dd .menu a").forEach(function(a){
+      if (a.getAttribute("href") === "#" + id) a.setAttribute("aria-current","page"); else a.removeAttribute("aria-current");
+    });
+    document.querySelectorAll("details.dd").forEach(function(d){ d.open = false; });
+    window.scrollTo(0, 0);
+  }
+  window.addEventListener("hashchange", show);
+  document.addEventListener("click", function(e){
+    document.querySelectorAll("details.dd[open]").forEach(function(d){ if (!d.contains(e.target)) d.open = false; });
+  });
+  document.addEventListener("keydown", function(e){ if (e.key === "Escape") document.querySelectorAll("details.dd[open]").forEach(function(d){ d.open = false; }); });
+  document.querySelectorAll("[data-explorer]").forEach(function(el){ Explorer(el, OTEZLA); });
+  show();
+})();
+</script>
+
+</body>
+</html>
